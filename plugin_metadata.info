@@ -1,0 +1,12 @@
+# Bundled parser metadata for the IntentDiff language-info API.
+
+[plugin]
+author = IntentDiff
+plugin_version = 0.1.0
+last_updated = 2026-07-17
+
+[language.proto]
+language_name = Protocol Buffers
+language_short_name = proto
+monaco_language = proto
+default_filename = service.proto
