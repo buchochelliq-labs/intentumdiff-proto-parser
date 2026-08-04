@@ -4,7 +4,7 @@
 //! field number and type as semantic children — a type or number change pairs as a
 //! MODIFICATION under the stable field identity (the wire-compat review story).
 
-use intentdiff_plugin_sdk::{
+use intentumdiff_plugin_sdk::{
     cst::CstNode,
     ts_convert::{convert_semantic, node_to_cst},
     tree::SemanticNodeBuilder,
@@ -15,10 +15,10 @@ wit_bindgen::generate!({
     world: "parser-plugin",
 });
 
-use crate::exports::intentdiff::plugin::parser::ExamplePair;
-use crate::exports::intentdiff::plugin::parser::Guest;
-use crate::exports::intentdiff::plugin::parser::LanguageInfoRecord;
-use crate::exports::intentdiff::plugin::parser::ParserMode;
+use crate::exports::intentumdiff::plugin::parser::ExamplePair;
+use crate::exports::intentumdiff::plugin::parser::Guest;
+use crate::exports::intentumdiff::plugin::parser::LanguageInfoRecord;
+use crate::exports::intentumdiff::plugin::parser::ParserMode;
 
 const LANGUAGE_ID: &str = "proto";
 const PLUGIN_METADATA: &str = include_str!("../plugin_metadata.info");
@@ -57,7 +57,7 @@ fn is_semantic(node_type: &str) -> bool {
 }
 
 fn language_info_for(ids: Vec<String>) -> Vec<LanguageInfoRecord> {
-    let metadata = intentdiff_plugin_sdk::metadata::parse_plugin_metadata(PLUGIN_METADATA);
+    let metadata = intentumdiff_plugin_sdk::metadata::parse_plugin_metadata(PLUGIN_METADATA);
     ids.into_iter()
         .map(|language_id| {
             let info = metadata.language_or_default(&language_id);
@@ -219,7 +219,7 @@ export!(ProtoParser);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use intentdiff_plugin_sdk::tree::SemanticNode;
+    use intentumdiff_plugin_sdk::tree::SemanticNode;
 
     fn labels_by_type(node: &SemanticNode, node_type: &str, out: &mut Vec<String>) {
         if node.node_type == node_type {
@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn messages_and_fields_are_labeled_by_identity() {
         let parsed = process_impl(DEFAULT_NEW);
-        intentdiff_plugin_sdk::testing::assert_valid_json(&parsed, LANGUAGE_ID);
+        intentumdiff_plugin_sdk::testing::assert_valid_json(&parsed, LANGUAGE_ID);
         let root: SemanticNode = serde_json::from_str(&parsed).unwrap();
         let mut messages = Vec::new();
         labels_by_type(&root, "message", &mut messages);
