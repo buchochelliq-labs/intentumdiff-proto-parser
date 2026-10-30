@@ -50,6 +50,10 @@ const SEMANTIC_TYPES: &[&str] = &[
     "key_type",
     "field_number",
     "message_or_enum_type",
+    // Tree-sitter recovery nodes must retain the original edited bytes. In
+    // particular, `syntax = "proto3X";` is not a valid proto syntax version,
+    // but silently pruning its ERROR node produced an empty new-side change.
+    "ERROR",
 ];
 
 fn is_semantic(node_type: &str) -> bool {
@@ -255,6 +259,40 @@ mod tests {
         assert!(fields.contains(&"name".to_string()), "fields: {fields:?}");
         assert!(fields.contains(&"login_count".to_string()), "fields: {fields:?}");
         assert!(fields.contains(&"active".to_string()), "fields: {fields:?}");
+    }
+
+    fn descendant_covers_byte(node: &SemanticNode, row: u32, col: u32) -> bool {
+        node.children.iter().any(|child| {
+            let pos = &child.position;
+            ((pos.start_line, pos.start_col) <= (row, col)
+                && (row, col) < (pos.end_line, pos.end_col))
+                || descendant_covers_byte(child, row, col)
+        })
+    }
+
+    #[test]
+    fn invalid_syntax_string_edit_preserves_new_side_source_evidence() {
+        // The 74-language corpus inserts X just before the closing quote in
+        // the top-level syntax directive. Proto's tree-sitter grammar accepts
+        // only the exact "proto2"/"proto3" literals; invalid editor input must
+        // remain visible through an ERROR recovery node, not disappear.
+        let original = "syntax = \"proto3\";\n\nmessage Invoice { string reference = 1; }\n";
+        let edited = "syntax = \"proto3X\";\n\nmessage Invoice { string reference = 1; }\n";
+        let old: SemanticNode = serde_json::from_str(&process_impl(original)).unwrap();
+        let new: SemanticNode = serde_json::from_str(&process_impl(edited)).unwrap();
+
+        assert!(
+            descendant_covers_byte(&new, 0, 16),
+            "edited X at UTF-8 byte col 16 must remain inside a non-root semantic node: {new:#?}"
+        );
+        assert!(
+            descendant_covers_byte(&old, 0, 15),
+            "unchanged original syntax must remain source-anchored: {old:#?}"
+        );
+        assert_ne!(
+            old.structural_hash, new.structural_hash,
+            "invalid syntax text must not be silently normalized or reduced to style"
+        );
     }
 
     #[test]
