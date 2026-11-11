@@ -295,6 +295,44 @@ mod tests {
         );
     }
 
+    fn find_exact<'a>(
+        node: &'a SemanticNode,
+        span: (u32, u32, u32, u32),
+    ) -> Option<&'a SemanticNode> {
+        let p = &node.position;
+        if (p.start_line, p.start_col, p.end_line, p.end_col) == span {
+            return Some(node);
+        }
+        node.children.iter().find_map(|c| find_exact(c, span))
+    }
+
+    #[test]
+    fn invalid_syntax_string_edit_keeps_exact_utf8_span_of_inserted_byte() {
+        // Issue #4 acceptance: the edited side keeps a concrete, nonzero span covering
+        // [row 0, byte columns 16-17) -- the inserted `X` -- and the old side keeps its
+        // real `syntax` directive. Positions are 0-based rows and UTF-8 byte columns.
+        let original = "syntax = \"proto3\";\n\nmessage Invoice { string reference = 1; }\n";
+        let edited = "syntax = \"proto3X\";\n\nmessage Invoice { string reference = 1; }\n";
+        let old: SemanticNode = serde_json::from_str(&process_impl(original)).unwrap();
+        let new: SemanticNode = serde_json::from_str(&process_impl(edited)).unwrap();
+
+        let x = find_exact(&new, (0, 16, 0, 17)).expect("node spanning exactly the inserted X");
+        assert_eq!(x.label, "X");
+        assert_eq!(&edited[16..17], "X");
+        // The invalid directive is not normalized back into a valid `syntax` node.
+        assert!(new.children.iter().all(|c| c.node_type != "syntax"), "{new:#?}");
+        assert_eq!(new.children[0].node_type, "ERROR");
+
+        let syntax = find_exact(&old, (0, 0, 0, 18)).expect("old syntax directive");
+        assert_eq!(syntax.node_type, "syntax");
+        assert_eq!(syntax.label, "syntax = \"proto3\";");
+
+        // Deterministic, and the untouched message keeps its identity and hash.
+        assert_eq!(process_impl(edited), process_impl(edited));
+        assert_eq!(old.children[1].label, "Invoice");
+        assert_eq!(old.children[1].structural_hash, new.children[1].structural_hash);
+    }
+
     #[test]
     fn field_type_change_alters_the_root_hash() {
         let old: SemanticNode = serde_json::from_str(&process_impl(DEFAULT_OLD)).unwrap();
